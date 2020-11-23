@@ -2,6 +2,28 @@
 
 import csv, os
 
+pluCols = {
+    'barcode': 0,
+    'dept': 1,
+    'name': 2,
+    'price': 3
+}
+
+stockCols = {
+    'code': 0,
+    'name': 1,
+    'dept': 2,
+    'supplier': 15,
+    'price': 19
+}
+
+auditCols = {
+    'barcode': 4,
+    'name': 6,
+    'price': 8,
+    'code': 9
+}
+
 def readFile(filename):
     with open(filename,'r',encoding='latin1') as csvDataFile:
         try:
@@ -42,36 +64,39 @@ def importAuditData(auditDirPath):
             auditRows = list(filter(lambda r: r[0] == 'D' and r[1] == '7', importedRows))
             yield (filename, auditRows)
 
+def removeDuplicatesFromPluData(pluRows):
+    global pluCols
+    pluRows.sort(key=lambda r: r[pluCols['name']])
+    pluRows = list(filter(lambda r: bool(r[1][pluCols['name']] !=  pluRows[r[0]-1][pluCols['name']]) if r[0] else True, enumerate(pluRows)))
+    return list(map(lambda r: r[1], pluRows))
+
+def createRow(auditRow, pluData, barcode):
+    global stockCols, auditCols
+    stockRow = [''] * 21
+    stockRow[stockCols['code']] = auditRow[auditCols['code']]
+    stockRow[stockCols['name']] = auditRow[auditCols['name']]
+    stockRow[stockCols['dept']] = pluData.get(barcode, [''] * 4)[pluCols['dept']]
+    stockRow[stockCols['price']] = auditRow[auditCols['price']]
+    stockRow[3] = 8
+    stockRow[5] = 1
+    stockRow[12] = 1
+    stockRow[14] = 1
+    stockRow[17] = 1
+    stockRow[18] = 1
+    stockRow[20] = auditRow[auditCols['code']]
+    return stockRow
+
 def buildStockData(dbPath):
     pluData = {}
     stockData = {}
     rejectedRows = []
-    pluCols = {
-        'barcode': 0,
-        'dept': 1,
-        'name': 2,
-        'price': 3
-    }
-
-    stockCols = {
-        'code': 0,
-        'name': 1,
-        'dept': 2,
-        'supplier': 15,
-        'price': 19
-    }
-
-    auditCols = {
-        'barcode': 4,
-        'name': 6,
-        'price': 8,
-        'code': 9
-    }
+    global pluCols, stockCols, auditCols
     stockRows = importCsvData(dbPath + '/Stock.cleaned.dat')
     print("starting Stock data length: {0}".format(len(stockRows)))
     for stockRow in stockRows:
         stockData[stockRow[stockCols['code']]] = stockRow
     pluRows = importCsvData(dbPath + '/plu.csv')
+    pluRows = removeDuplicatesFromPluData(pluRows)
     for pluRow in pluRows:
         pluData[str(pluRow[pluCols['barcode']]).strip()] = pluRow
     print("Plu data length: {0}".format(len(pluRows)))
@@ -80,31 +105,26 @@ def buildStockData(dbPath):
     for (filename, auditRows) in importAuditData(dbPath + '/Sp001/Audit'):
         auditRowCount+= len(auditRows)
         for auditRow in auditRows:
-            try:
-                barcode = str(auditRow[auditCols['barcode']]).lstrip('0')
-                if stockData.get(auditRow[auditCols['code']], None) == None:
-                    if pluData.get(barcode, None) != None:
-                        stockRow = [''] * 21
-                        stockRow[stockCols['code']] = auditRow[auditCols['code']]
-                        stockRow[stockCols['name']] = auditRow[auditCols['name']]
-                        stockRow[stockCols['dept']] = pluData.get(barcode, [''] * 4)[pluCols['dept']]
-                        stockRow[stockCols['price']] = auditRow[auditCols['price']]
-                        stockRow[3] = 8
-                        stockRow[5] = 1
-                        stockRow[12] = 1
-                        stockRow[14] = 1
-                        stockRow[17] = 1
-                        stockRow[18] = 1
-                        stockRow[20] = auditRow[auditCols['code']]
-                        stockData[auditRow[auditCols['code']]] = stockRow
+            # try:
+            barcode = str(auditRow[auditCols['barcode']]).lstrip('0')
+            if stockData.get(auditRow[auditCols['code']], None) == None:
+                if pluData.get(barcode, None) != None:
+                    stockData[auditRow[auditCols['code']]] = createRow(auditRow, pluData, barcode)
+                else:
+                    nameMatchRows = list(filter(lambda r: r[pluCols['name']] == auditRow[auditCols['name']], pluRows))
+                    if len(nameMatchRows) > 0:
+                        print(nameMatchRows[0])
+                        for nameMatchRow in nameMatchRows:
+                            stockData[auditRow[auditCols['code']]] = createRow(auditRow, pluData, nameMatchRow[pluCols['barcode']])
                     else:
                         rejectedRows.append(auditRow)
-            except:
-                print('Failed in file ' + filename + 'with data:')
-                print(auditRow)
+            # except:
+            #     print('Failed in file ' + filename + 'with data: ')
+            #     print(auditRow)
 
     print("Audited Rows Count: {0}".format(auditRowCount))
     print("Ending Stock data length: {0}".format(len(stockData)))
+    print("Rejected Rows length: {0}".format(len(rejectedRows)))
 
     stockRows = []
     for code in stockData:
