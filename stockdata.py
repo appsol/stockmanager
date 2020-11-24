@@ -2,6 +2,11 @@
 
 import csv, os
 
+stockData = []
+pluData = []
+categoryData = []
+supplierData = []
+
 pluCols = {
     'barcode': 0,
     'dept': 1,
@@ -14,7 +19,7 @@ stockCols = {
     'name': 1,
     'dept': 2,
     'supplier': 15,
-    'price': 19
+    'cost': 19
 }
 
 auditCols = {
@@ -86,6 +91,34 @@ def createRow(auditRow, pluData, barcode):
     stockRow[20] = auditRow[auditCols['code']]
     return stockRow
 
+def createPluStockCsvHeaders():
+    return ['PluNo','StockCode','EcrText1','Price1']
+
+def createPluStockCsvRow(barcode, code, name, price):
+    return [barcode, code, name, price]
+
+def createStockCsvHeaders():
+    return ['StockCode', 'Description', 'Category', 'SupplierKey1', 'DUCost1']
+
+def createStockCsvRow(barcode, code, name, price):
+    return [barcode, code, name, price]
+
+def importStockData(path):
+    stockRows = importCsvData(path)
+    print("starting Stock data length: {0}".format(len(stockRows)))
+
+def importCategoryData(path):
+    categoryRows = importCsvData(path)
+    print("starting Category data length: {0}".format(len(categoryRows)))
+
+def importPluData(path):
+    pluRows = importCsvData(path)
+    print("Plu data length: {0}".format(len(pluRows)))
+
+def importSupplierData(path):
+    supplierRows = importCsvData(path)
+    print("Plu data length: {0}".format(len(supplierRows)))
+
 def buildStockData(dbPath):
     pluData = {}
     stockData = {}
@@ -137,5 +170,14 @@ def buildStockData(dbPath):
 
 
 if __name__ == '__main__':
-    dbPath = str(input('Path to Db001: '))
-    buildStockData(dbPath)
+    stockPath = str(input('Path to Stock.dat: '))
+    importStockData(stockPath)
+
+    pluPath = str(input('Path to Plu.csv: '))
+    importPluData(pluPath)
+
+    catPath = str(input('Path to category.dat: '))
+    importCategoryData(catPath)
+
+    supplierPath = str(input('Path to Supply.dat: '))
+    importSupplierData(supplierPath)
